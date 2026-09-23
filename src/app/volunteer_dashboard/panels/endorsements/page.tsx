@@ -13,26 +13,27 @@ import Panel from '@/components/common/panel/Panel'
 import { SidebarBody } from '@/components/common/panel/sidebar_list/SidebarBody'
 import { TabSpec } from '@/components/common/tab_bar/TabBar'
 import {
-    BackgroundColor,
-    Endorsement,
-    ElectionStatus,
-    EndorsementType,
-    InitiativeType,
-} from '@/contracts/data'
-import { SortDirection } from '@/contracts/requests'
-import {
     ENDORSEMENT_TYPE_LABELS,
     INITIATIVE_TYPE_LABELS,
     getRelevantElectionDate,
     getStateLabel,
 } from '@/models'
 import { useEndorsementQueries } from '@/queries'
+import { cn } from '@/util'
 import {
     useOptimisticDelete,
     useOptimisticUpdate,
     useUnpaginatedSearch,
 } from '@/util/hooks'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+    BackgroundColor,
+    Endorsement,
+    ElectionStatus,
+    EndorsementType,
+    InitiativeType,
+} from 'pv-contracts/data'
+import { SortDirection } from 'pv-contracts/requests'
 import { useState } from 'react'
 import { useMediaQuery } from 'usehooks-ts'
 
@@ -89,7 +90,7 @@ const endorsementLevelTagClass: Record<EndorsementType, string | undefined> = {
     [EndorsementType.PVPledge]: styles.tagPurple,
     [EndorsementType.Endorsement]: styles.tagGreen,
     [EndorsementType.Recommendation]: styles.tagRed,
-    [EndorsementType.Unendorsed]: undefined,
+    [EndorsementType.Unendorsed]: styles.tagDarkRed,
     [EndorsementType.None]: styles.tagDefault,
 }
 
@@ -101,12 +102,24 @@ const initiativeLevelTagClass: Record<InitiativeType, string | undefined> = {
 
 const makeLevelTags = (endorsement: Endorsement) => [
     {
-        label: ENDORSEMENT_TYPE_LABELS[endorsement.endorsementLevel],
-        className: endorsementLevelTagClass[endorsement.endorsementLevel],
+        label:
+            endorsement.endorsementLevel === EndorsementType.None
+                ? 'No Endorsement'
+                : ENDORSEMENT_TYPE_LABELS[endorsement.endorsementLevel],
+        className: cn(
+            styles.sidebarLevelTag,
+            endorsementLevelTagClass[endorsement.endorsementLevel]
+        ),
     },
     {
-        label: INITIATIVE_TYPE_LABELS[endorsement.initiativeLevel],
-        className: initiativeLevelTagClass[endorsement.initiativeLevel],
+        label:
+            endorsement.initiativeLevel === InitiativeType.None
+                ? 'No Initiative'
+                : INITIATIVE_TYPE_LABELS[endorsement.initiativeLevel],
+        className: cn(
+            styles.sidebarLevelTag,
+            initiativeLevelTagClass[endorsement.initiativeLevel]
+        ),
     },
 ]
 

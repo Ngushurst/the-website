@@ -5,6 +5,7 @@ import {
     type ButtonHTMLAttributes,
     type CSSProperties,
     type KeyboardEvent,
+    type MouseEvent,
     type ReactNode,
     useContext,
     useEffect,
@@ -17,13 +18,16 @@ import { createPortal } from 'react-dom'
 import { FiCheck, FiChevronRight } from 'react-icons/fi'
 
 type DropdownOverlayButtonMenu =
-    | ReactNode
-    | ((controls: { closeMenu: () => void }) => ReactNode)
+    ReactNode | ((controls: { closeMenu: () => void }) => ReactNode)
 
 export interface DropdownOverlayButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     icon?: ReactNode
     selected?: boolean
     checked?: boolean
+    onCheckedChange?: (
+        checked: boolean,
+        event: MouseEvent<HTMLButtonElement>
+    ) => void
     menu?: DropdownOverlayButtonMenu
 }
 
@@ -35,6 +39,7 @@ export function DropdownOverlayButton({
     className,
     children,
     onClick,
+    onCheckedChange,
     onKeyDown,
     ...props
 }: DropdownOverlayButtonProps) {
@@ -177,7 +182,10 @@ export function DropdownOverlayButton({
         event
     ) => {
         onClick?.(event)
-        if (!event.defaultPrevented && hasMenu) setIsOpen(!isOpen)
+        if (event.defaultPrevented) return
+
+        if (hasCheckmark) onCheckedChange?.(!checked, event)
+        if (hasMenu) setIsOpen(!isOpen)
     }
 
     const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {

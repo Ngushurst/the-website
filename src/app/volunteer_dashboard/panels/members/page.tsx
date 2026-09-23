@@ -5,7 +5,6 @@ import styles from './page.module.css'
 import { DonorView } from './panel_views/DonorView'
 import { HistoryView } from './panel_views/HistoryView'
 import { MemberView } from './panel_views/MemberView'
-import { ListElement } from '@/app/admin/layout/List'
 import {
     FilterTags,
     FilterTag,
@@ -17,28 +16,9 @@ import { FormState } from '@/components/common/forms'
 import Panel from '@/components/common/panel/Panel'
 import { SidebarBody } from '@/components/common/panel/sidebar_list/SidebarBody'
 import { TabSpec } from '@/components/common/tab_bar/TabBar'
-import {
-    ActBlueDonor,
-    Role,
-    UpdateHistory,
-    User,
-    UserProfile,
-    zActBlueDonor,
-    zLocation,
-    zRole,
-    zUser,
-    zUserProfile,
-} from '@/contracts/data'
-import {
-    ActBlueDonorLinkRequest,
-    SortDirection,
-    UpdateUserRequest,
-    zUpdateUserRequest,
-} from '@/contracts/requests'
-import { PaginatedResponse } from '@/contracts/responses'
 import { FetchError, stateOptions } from '@/models'
 import { usePositionQueries } from '@/queries'
-import { cn, parseErrorMessage } from '@/util'
+import { cn, parseErrorMessage, DOT_SEPARATOR } from '@/util'
 import { useCurrentUser, useFetch, usePaginatedSearch } from '@/util/hooks'
 import {
     keepPreviousData,
@@ -48,12 +28,42 @@ import {
     useQueryClient,
 } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+    ActBlueDonor,
+    Position,
+    Role,
+    UpdateHistory,
+    User,
+    UserProfile,
+    zActBlueDonor,
+    zLocation,
+    zRole,
+    zUser,
+    zUserProfile,
+} from 'pv-contracts/data'
+import {
+    ActBlueDonorLinkRequest,
+    SortDirection,
+    UpdateUserRequest,
+    zUpdateUserRequest,
+} from 'pv-contracts/requests'
+import { PaginatedResponse } from 'pv-contracts/responses'
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    type Key,
+    type ReactElement,
+    type ReactNode,
+} from 'react'
 import {
     FaUsers,
     FaUserTag,
     FaBirthdayCake,
     FaMapMarkerAlt,
+    FaSitemap,
+    FaUserShield,
 } from 'react-icons/fa'
 import { FaClipboardUser, FaDollarSign, FaAddressCard } from 'react-icons/fa6'
 import { MdVerified } from 'react-icons/md'
@@ -96,9 +106,17 @@ const MEMBER_SORT_FIELD_OPTIONS = [
     { value: 'updated_at_utc', label: 'Recently Edited' },
 ]
 
-// Behavior is pending API support for these filters.
+// # TODO:Behavior is pending API support for these filters.
 const userFilterOptions = [
     { key: 'verified', label: 'Verified', icon: <MdVerified /> },
+]
+
+// # TODO: Behavior is pending API support for membership tiers.
+const MEMBERSHIP_TIER_OPTIONS = [
+    { value: 'dues_paying', label: 'Dues Paying Members' },
+    { value: 'premium', label: 'Premium Members' },
+    { value: 'signature', label: 'Signature Members' },
+    { value: 'inner_circle', label: 'Inner Circle Members' },
 ]
 
 const currentYear = new Date().getFullYear()
@@ -106,6 +124,61 @@ const birthYears = Array.from(
     { length: currentYear - 1899 },
     (_, index) => currentYear - index
 )
+
+interface FilterSubmenuProps<T> {
+    label: string
+    icon: ReactElement
+    active: boolean
+    options: T[]
+    emptyMessage?: string
+    optionKey: (option: T) => Key
+    optionLabel: (option: T) => ReactNode
+    isSelected: (option: T) => boolean
+    onSelect: (option?: T) => void
+    closeDropdown: () => void
+}
+
+function FilterSubmenu<T>({
+    label,
+    icon,
+    active,
+    options,
+    emptyMessage,
+    optionKey,
+    optionLabel,
+    isSelected,
+    onSelect,
+    closeDropdown,
+}: FilterSubmenuProps<T>) {
+    return (
+        <DropdownOverlayButton
+            icon={icon}
+            selected={active}
+            menu={({ closeMenu }) => (
+                <div className={styles.nestedFilterMenu}>
+                    {emptyMessage && !options.length && (
+                        <p className={styles.emptyFilterMenu}>{emptyMessage}</p>
+                    )}
+                    {options.map((option) => (
+                        <DropdownOverlayButton
+                            key={optionKey(option)}
+                            checked={isSelected(option)}
+                            onCheckedChange={(checked) => {
+                                onSelect(checked ? option : undefined)
+                                closeMenu()
+                                closeDropdown()
+                            }}
+                        >
+                            {optionLabel(option)}
+                        </DropdownOverlayButton>
+                    ))}
+                </div>
+            )}
+        >
+            {label}
+        </DropdownOverlayButton>
+    )
+}
 
 export default function Page() {
     const queryClient = useQueryClient()
@@ -127,21 +200,33 @@ export default function Page() {
     const [pickingDonor, setPickingDonor] = useState<boolean>(false)
     const [selectedTab, setSelectedTab] = useState<MemberTabKey>('overview')
     const [activeFilterTag, setActiveFilterTag] = useState<string>('all')
-    const [selectedState, setSelectedState] = useState<string | null>(null)
-    const [selectedBirthYear, setSelectedBirthYear] = useState<number | null>(
-        null
-    )
+    const [selectedMembershipTier, setSelectedMembershipTier] =
+        useState<string>()
+    const [selectedState, setSelectedState] = useState<string>()
+    const [selectedBirthYear, setSelectedBirthYear] = useState<number>()
+    const [selectedPosition, setSelectedPosition] = useState<Position>()
+    const [selectedRole, setSelectedRole] = useState<Role>()
 
     const selectedStateLabel = stateOptions.find(
         (state) => state.value === selectedState
     )?.label
     const selectedFilterLabel =
-        [selectedStateLabel, selectedBirthYear].filter(Boolean).join(' · ') ||
-        'All Users'
+        [
+            selectedStateLabel,
+            selectedBirthYear,
+            selectedPosition?.name,
+            selectedRole?.name,
+        ]
+            .filter(Boolean)
+            .join(` ${DOT_SEPARATOR} `) || 'All Users'
     const selectedFilterIcon = selectedState ? (
         <FaMapMarkerAlt />
     ) : selectedBirthYear ? (
         <FaBirthdayCake />
+    ) : selectedPosition ? (
+        <FaSitemap />
+    ) : selectedRole ? (
+        <FaUserShield />
     ) : (
         <FaUsers />
     )
@@ -149,13 +234,28 @@ export default function Page() {
     const memberFilterTags: FilterTag[] = [
         {
             key: 'members',
-            label: 'Members',
+            label: 'My Lists',
             icon: <FaUserTag />,
             color: '#5997E0',
             width: '11.65rem',
             activeRedirect: 'all',
             scrollLeft: 'members',
             scrollRight: 'all',
+            dropdownOverlay: ({ closeDropdown }) => (
+                <DropdownOverlay
+                    label="My Lists"
+                    onClose={closeDropdown}
+                    narrowLayoutMode="trigger"
+                    align="start"
+                    body={
+                        <div className={styles.filterMenu}>
+                            <p className={styles.emptyFilterMenu}>
+                                No saved lists yet
+                            </p>
+                        </div>
+                    }
+                />
+            ),
         },
         {
             key: 'server',
@@ -176,16 +276,71 @@ export default function Page() {
             activeRedirect: 'all',
             scrollLeft: 'members',
             scrollRight: 'all',
+            dropdownOverlay: ({ closeDropdown }) => (
+                <DropdownOverlay
+                    label="Donors"
+                    onClose={closeDropdown}
+                    narrowLayoutMode="trigger"
+                    align="start"
+                    body={
+                        <div className={styles.filterMenu}>
+                            <p className={styles.emptyFilterMenu}>
+                                No donor filters yet
+                            </p>
+                        </div>
+                    }
+                />
+            ),
         },
         {
             key: 'dues',
-            label: 'Membership',
+            label:
+                MEMBERSHIP_TIER_OPTIONS.find(
+                    (option) => option.value === selectedMembershipTier
+                )?.label ?? 'Membership',
             icon: <FaAddressCard />,
             color: '#C65882',
             width: '11.65rem',
             activeRedirect: 'all',
             scrollLeft: 'members',
             scrollRight: 'all',
+            dropdownOverlay: ({ closeDropdown }) => (
+                <DropdownOverlay
+                    label="Membership"
+                    onClose={closeDropdown}
+                    narrowLayoutMode="trigger"
+                    align="start"
+                    body={
+                        <div className={styles.filterMenu}>
+                            <DropdownOverlayButton
+                                checked={selectedMembershipTier === undefined}
+                                onClick={() => {
+                                    setSelectedMembershipTier(undefined)
+                                    closeDropdown()
+                                }}
+                            >
+                                All
+                            </DropdownOverlayButton>
+                            {MEMBERSHIP_TIER_OPTIONS.map((option) => (
+                                <DropdownOverlayButton
+                                    key={option.value}
+                                    checked={
+                                        selectedMembershipTier === option.value
+                                    }
+                                    onCheckedChange={(checked) => {
+                                        setSelectedMembershipTier(
+                                            checked ? option.value : undefined
+                                        )
+                                        closeDropdown()
+                                    }}
+                                >
+                                    {option.label}
+                                </DropdownOverlayButton>
+                            ))}
+                        </div>
+                    }
+                />
+            ),
         },
         {
             key: 'all',
@@ -203,20 +358,6 @@ export default function Page() {
                     narrowLayoutMode="trigger"
                     body={
                         <div className={styles.filterMenu}>
-                            <DropdownOverlayButton
-                                icon={<FaUsers />}
-                                checked={
-                                    selectedState === null &&
-                                    selectedBirthYear === null
-                                }
-                                onClick={() => {
-                                    setSelectedState(null)
-                                    setSelectedBirthYear(null)
-                                    closeDropdown()
-                                }}
-                            >
-                                All
-                            </DropdownOverlayButton>
                             {userFilterOptions.map((option) => (
                                 <DropdownOverlayButton
                                     key={option.key}
@@ -225,61 +366,74 @@ export default function Page() {
                                     {option.label}
                                 </DropdownOverlayButton>
                             ))}
-                            <DropdownOverlayButton
+                            <FilterSubmenu
+                                label="Age"
                                 icon={<FaBirthdayCake />}
-                                selected={selectedBirthYear !== null}
-                                menu={({ closeMenu }) => (
-                                    <div className={styles.nestedFilterMenu}>
-                                        {birthYears.map((year) => (
-                                            <DropdownOverlayButton
-                                                key={year}
-                                                checked={
-                                                    selectedBirthYear === year
-                                                }
-                                                onClick={() => {
-                                                    setSelectedState(null)
-                                                    setSelectedBirthYear(year)
-                                                    closeMenu()
-                                                    closeDropdown()
-                                                }}
-                                            >
-                                                {year}
-                                            </DropdownOverlayButton>
-                                        ))}
-                                    </div>
-                                )}
-                            >
-                                Age
-                            </DropdownOverlayButton>
-                            <DropdownOverlayButton
+                                active={selectedBirthYear !== undefined}
+                                options={birthYears}
+                                optionKey={(year) => year}
+                                optionLabel={(year) => year}
+                                isSelected={(year) =>
+                                    selectedBirthYear === year
+                                }
+                                onSelect={(year) => {
+                                    setSelectedState(undefined)
+                                    setSelectedPosition(undefined)
+                                    setSelectedBirthYear(year)
+                                }}
+                                closeDropdown={closeDropdown}
+                            />
+                            <FilterSubmenu
+                                label="State"
                                 icon={<FaMapMarkerAlt />}
-                                selected={selectedState !== null}
-                                menu={({ closeMenu }) => (
-                                    <div className={styles.nestedFilterMenu}>
-                                        {stateOptions.map((state) => (
-                                            <DropdownOverlayButton
-                                                key={state.value}
-                                                checked={
-                                                    selectedState ===
-                                                    state.value
-                                                }
-                                                onClick={() => {
-                                                    setSelectedBirthYear(null)
-                                                    setSelectedState(
-                                                        state.value
-                                                    )
-                                                    closeMenu()
-                                                    closeDropdown()
-                                                }}
-                                            >
-                                                {state.label}
-                                            </DropdownOverlayButton>
-                                        ))}
-                                    </div>
-                                )}
-                            >
-                                State
-                            </DropdownOverlayButton>
+                                active={selectedState !== undefined}
+                                options={stateOptions}
+                                optionKey={(state) => state.value}
+                                optionLabel={(state) => state.label}
+                                isSelected={(state) =>
+                                    selectedState === state.value
+                                }
+                                onSelect={(state) => {
+                                    setSelectedBirthYear(undefined)
+                                    setSelectedPosition(undefined)
+                                    setSelectedState(state?.value)
+                                }}
+                                closeDropdown={closeDropdown}
+                            />
+                            <FilterSubmenu
+                                label="Position"
+                                icon={<FaSitemap />}
+                                active={selectedPosition !== undefined}
+                                options={
+                                    positionHierarchy.data?.positions ?? []
+                                }
+                                emptyMessage="No positions available"
+                                optionKey={(position) => position.id}
+                                optionLabel={(position) => position.name}
+                                isSelected={(position) =>
+                                    selectedPosition?.id === position.id
+                                }
+                                onSelect={(position) => {
+                                    setSelectedBirthYear(undefined)
+                                    setSelectedState(undefined)
+                                    setSelectedPosition(position)
+                                }}
+                                closeDropdown={closeDropdown}
+                            />
+                            <FilterSubmenu
+                                label="Role"
+                                icon={<FaUserShield />}
+                                active={selectedRole !== undefined}
+                                options={roles}
+                                emptyMessage="No roles available"
+                                optionKey={(role) => role.id}
+                                optionLabel={(role) => role.name}
+                                isSelected={(role) =>
+                                    selectedRole?.id === role.id
+                                }
+                                onSelect={handleRoleFilterChange}
+                                closeDropdown={closeDropdown}
+                            />
                         </div>
                     }
                 />
@@ -287,9 +441,19 @@ export default function Page() {
         },
     ]
 
+    const handleRoleFilterChange = (role?: Role) => {
+        setSelectedRole(role)
+        const rest = Object.fromEntries(
+            Object.entries(search).filter(([key]) => key !== 'roleIds')
+        )
+        const roleFilter: Record<string, number[]> = {}
+        if (role) roleFilter.roleIds = [role.id]
+        onSearch({ ...rest, page: 0, ...roleFilter })
+    }
+
     const handleFilterTagChange = (key: string) => {
         setActiveFilterTag(key)
-        //others blank on purpose waiting for API side logic to be implemented.
+        // # TODO others blank on purpose waiting for API side logic to be implemented.
         const rest = Object.fromEntries(
             Object.entries(search).filter(
                 ([k]) =>
@@ -607,12 +771,14 @@ export default function Page() {
     const renderDonorItem = useCallback(
         (item: ActBlueDonor, userId: number) => {
             return (
-                <ListElement
+                <button
                     key={item.email}
+                    type="button"
+                    className={styles.donorPickerItem}
                     onClick={() => void handleSelectDonorItem(item, userId)}
                 >
                     <span>{`${item.firstname} ${item.lastname}`}</span>
-                </ListElement>
+                </button>
             )
         },
         [handleSelectDonorItem]
@@ -736,16 +902,6 @@ export default function Page() {
                     sortFieldOptions: MEMBER_SORT_FIELD_OPTIONS,
                     showSort: true,
                     showLimit: true,
-                    options: [
-                        {
-                            label: 'Role',
-                            value: 'roleIds',
-                            options: roles.map((role) => ({
-                                label: role.name,
-                                value: role.id,
-                            })),
-                        },
-                    ],
                 },
             }}
             sidebarBody={

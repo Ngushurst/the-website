@@ -28,8 +28,7 @@ export interface FilterTag {
      * show a chevron and ignore `activeRedirect`.
      */
     dropdownOverlay?:
-        | ReactNode
-        | ((controls: { closeDropdown: () => void }) => ReactNode)
+        ReactNode | ((controls: { closeDropdown: () => void }) => ReactNode)
 }
 
 interface FilterTagsProps {
@@ -59,9 +58,8 @@ function TagButton({
 
     useLayoutEffect(() => {
         if (labelRef.current) {
-            setLabelWidth(
-                Math.ceil(labelRef.current.getBoundingClientRect().width) + 1
-            )
+            // scrollWidth keeps the untruncated width once the label is clipped
+            setLabelWidth(labelRef.current.scrollWidth + 1)
         }
     }, [tag.label, isActive, setLabelWidth])
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { JurisdictionField } from '../components/JurisdictionField'
 import styles from './DetailView.module.css'
 import {
     CheckboxField,
@@ -15,19 +16,13 @@ import {
 } from '@/components/common/forms'
 import formFieldStyles from '@/components/common/forms/FormField.module.css'
 import {
-    BackgroundColor,
-    ElectionStatus,
-    Endorsement,
-    EndorsementType,
-    InitiativeType,
-} from '@/contracts/data'
-import {
     electionStatusOptions,
     endorsementLevelOptions,
     initiativeLevelOptions,
     stateOptions,
 } from '@/models'
 import { cn, parseErrorMessage } from '@/util'
+import { BackgroundColor, Endorsement } from 'pv-contracts/data'
 import { ChangeEvent, useCallback, useState } from 'react'
 
 const stateOptionsWithEmpty = [
@@ -95,7 +90,7 @@ export function DetailView({
                     getter={(form) => form.avatarBgColor}
                     setter={(form, field) => ({
                         ...form,
-                        avatarBgColor: Number(field) as BackgroundColor,
+                        avatarBgColor: Number(field),
                     })}
                     options={avatarBgColorOptions}
                 />
@@ -111,11 +106,11 @@ export function DetailView({
                     getter={(form) => form.electionStatus}
                     setter={(form, field) => ({
                         ...form,
-                        electionStatus: Number(field) as ElectionStatus,
+                        electionStatus: Number(field),
                     })}
                     options={electionStatusOptions}
                 />
-                <TextField label="Jurisdiction" field="jurisdiction" />
+                <JurisdictionField label="Jurisdiction" field="jurisdiction" />
                 <DateField
                     label="General Election"
                     field="generalElectionDate"
@@ -139,7 +134,7 @@ export function DetailView({
                     getter={(form) => form.endorsementLevel}
                     setter={(form, field) => ({
                         ...form,
-                        endorsementLevel: Number(field) as EndorsementType,
+                        endorsementLevel: Number(field),
                     })}
                     options={endorsementLevelOptions}
                 />
@@ -149,7 +144,7 @@ export function DetailView({
                     getter={(form) => form.initiativeLevel}
                     setter={(form, field) => ({
                         ...form,
-                        initiativeLevel: Number(field) as InitiativeType,
+                        initiativeLevel: Number(field),
                     })}
                     options={initiativeLevelOptions}
                 />
