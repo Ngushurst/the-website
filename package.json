@@ -16,7 +16,6 @@
         "prettier-ci": "prettier --check --ignore-path .prettierignore ."
     },
     "dependencies": {
-        "@auth/core": "^0.40.0",
         "@dagrejs/dagre": "^1.0.4",
         "@dagrejs/graphlib": "^3.0.2",
         "@headlessui/react": "^2.2.9",
